@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project(cv_houghline)
+find_package(OpenCV REQUIRED)
+add_executable(cv_houghline cv_houghline.cpp)
+target_link_libraries(cv_houghline ${OpenCV_LIBS})
