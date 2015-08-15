@@ -77,11 +77,10 @@ void houghtransform(Mat img, int nmax, double *r0, double *omega0)
    // It has the omega angles on the rows, ranging between 0 and 180
    // (the actual number of values is defined by the granularity)
    // And lengths on the columns, ranging from 0 to 2 * rmax
-   // We make it bigger because we need a 1 pixel margin to make max search easier
-   int z[182][2 * rmax + 3];
+   int z[180][2 * rmax + 1];
    // And initialise it with zeroes:
-   for (int omega = 0; omega < 182; omega++)
-      for (int r = 0; r < 2 * rmax + 3; r++)
+   for (int omega = 0; omega < 180; omega++)
+      for (int r = 0; r < 2 * rmax + 1; r++)
          z[omega][r] = 0;
    
    // Build a lookup table of sin and cos values between 0 and 180
@@ -109,8 +108,7 @@ void houghtransform(Mat img, int nmax, double *r0, double *omega0)
 //               ri = (i - xc) * cos_lut[omega] + (j - yc) * sin_lut[omega];
                ri = (x - xc) * cos(omega * conv) + (y - yc) * sin(omega * conv);
                // And we increment the appropriate entry in the Hough space matrix z:
-               z[omega + 1][rmax + ri + 1] += 1;
-               // The +1s are necessary because of the 1 pixel margin
+               z[omega][rmax + ri] += 1;
             }
 
    /*
@@ -119,26 +117,26 @@ void houghtransform(Mat img, int nmax, double *r0, double *omega0)
       
       We find the maximum by searching for weighted maxima in a 3x3 neighbourhood      
    */
+   printf("Finding maxima in Hough space...\n\n");
    double zmax = -1.0, crtmax = 0.0;
    int crtr, crtomega;
    for (int i = 0; i < nmax; i++)
    {
       zmax = -1.0;
       crtmax = 0.0;
-      for (int omega = 1; omega < 181; omega++)
-         for (int r = 1; r < 2 * rmax + 2; r++)
+      for (int omega = 1; omega < 179; omega++)
+         for (int r = 1; r < 2 * rmax; r++)
          {
             crtmax = (z[omega-1][r-1] + z[omega-1][r] + z[omega-1][r+1] + z[omega][r-1] + z[omega][r] + z[omega][r+1] + z[omega+1][r-1] + z[omega+1][r] + z[omega+1][r+1]) / 9;
             
             if (crtmax > zmax)
             {
                zmax = crtmax;
-               crtr = r - 1; 
-               crtomega = omega - 1;
-               // -1s because we need to take into account the fake 1 pixel margin
+               crtr = r; 
+               crtomega = omega;
             }
          }
-      printf("Maximum #%d is: zmax=%f | r=%i | omega=%i \n", i, zmax, crtr - rmax, crtomega);
+      printf("Maximum #%d is: zmax=%f | r=%i | omega=%i \n\n", i, zmax, crtr - rmax, crtomega);
       if (zmax != 0)
       {
          r0[i] = (double)(z[crtomega][crtr-1] * (crtr - 1) + z[crtomega][crtr] * crtr + z[crtomega][crtr+1] * (crtr + 1)) / (double)(z[crtomega][crtr-1] + z[crtomega][crtr] + z[crtomega][crtr+1]);
@@ -168,23 +166,24 @@ void houghtransform(Mat img, int nmax, double *r0, double *omega0)
          Make an opencv image out of the Hough image, for visualisation
          We need to scale the values in the z matrix so that they are between 0 and 255
       */
-      int max = 0;
-      for (int omega = 1; omega < 181; omega++)
-         for (int r = 1; r < 2 * rmax + 2; r++)
-            if (z[omega][r] > max) max = z[omega][r];
-            
-      Mat houghImage(180, 2 * rmax + 1, CV_8U);   
-      for (int omega = 1; omega < 181; omega++)
-         for (int r = 1; r < 2 * rmax + 2; r++)
-            houghImage.at<uchar>(omega - 1, r - 1) = (uchar) (z[omega][r] * 255 / max);   
+   printf("Making an image out of the Hough space...\n\n");
+   int max = 0;
+   for (int omega = 0; omega < 180; omega++)
+      for (int r = 0; r < 2 * rmax + 1; r++)
+         if (z[omega][r] > max) max = z[omega][r];
+         
+   Mat houghImage(180, 2 * rmax + 1, CV_8U);   
+   for (int omega = 0; omega < 180; omega++)
+      for (int r = 0; r < 2 * rmax + 1; r++)
+         houghImage.at<uchar>(omega, r) = (uchar) (z[omega][r] * 255 / max);   
       
-      // Do some magic to transform the i into a string
-      std::string imgName;
-      std::stringstream out;
-      out << 4;
-      imgName = out.str();
-      // so we can have dynamically named images, so we can show the hough space at each iteration :-)
-      imshow(imgName, houghImage);      
+   // Do some magic to transform the i into a string
+   std::string imgName;
+   std::stringstream out;
+   out << 4;
+   imgName = out.str();
+   // so we can have dynamically named images, so we can show the hough space at each iteration :-)
+   imshow(imgName, houghImage);      
 }
 
 int main(int argc, char **argv)
@@ -223,6 +222,7 @@ int main(int argc, char **argv)
    /*******************************
       DETECTED LINE DRAWING STEPS
     ******************************/   
+   printf("Drawing detected lines...\n\n"); 
    generateColours();
    srand(time(NULL));
    int colIndex;
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
             xvals[x] = x;
             yvals[x] = round((-cos(omega0[i] * conv) / sin(omega0[i] * conv)) * (double)(x - (grayImage.cols / 2)) + (r0[i] / sin(omega0[i] * conv)) + (double)(grayImage.rows / 2));
          }
-         printf("(xval0 = %d, yval0 = %d) to (xvaln = %d, yvaln = %d) \n", xvals[0], yvals[0], xvals[grayImage.cols - 1], yvals[grayImage.cols - 1]);
+         printf("Line from (xval0 = %d, yval0 = %d) to (xvaln = %d, yvaln = %d) \n\n", xvals[0], yvals[0], xvals[grayImage.cols - 1], yvals[grayImage.cols - 1]);
          line(srcImage, Point(xvals[0], yvals[0]), Point(xvals[grayImage.cols - 1], yvals[grayImage.cols - 1]), Scalar(colours[colIndex].blue, colours[colIndex].green, colours[colIndex].red), 2, 8);
       }
       else
@@ -268,11 +268,12 @@ int main(int argc, char **argv)
             yvals[y] = y;
             xvals[y] = round((-sin(omega0[i] * conv) / cos(omega0[i] * conv)) * (double)(y - (grayImage.rows / 2)) + (r0[i] / cos(omega0[i] * conv)) + (double)(grayImage.cols / 2));
          }
-         printf("(xval0 = %d, yval0 = %d) to (xvaln = %d, yvaln = %d) \n", xvals[0], yvals[0], xvals[grayImage.rows - 1], yvals[grayImage.rows - 1]);
+         printf("Line from (xval0 = %d, yval0 = %d) to (xvaln = %d, yvaln = %d) \n\n", xvals[0], yvals[0], xvals[grayImage.rows - 1], yvals[grayImage.rows - 1]);
          line(srcImage, Point(xvals[0], yvals[0]), Point(xvals[grayImage.rows - 1], yvals[grayImage.rows - 1]), Scalar(colours[colIndex].blue, colours[colIndex].green, colours[colIndex].red), 2, 8);
       }
       imshow("Detected lines", srcImage);
-   }      
+   }
+   printf("\n\n");
    waitKey(0);
 
    return 0;
