@@ -124,6 +124,86 @@ void houghtransform(Mat img, int nmax, double *r0, double *omega0)
    {
       zmax = -1.0;
       crtmax = 0.0;
+      
+      // Deal with corners separately, as they have only 3 neighbours:
+      // [0, 0]
+      crtmax = (z[0][0] + z[0][1] + z[1][0] + z[1][1]) / 4;
+      if (crtmax > zmax)
+         {
+            zmax = crtmax;
+            crtr = 0; 
+            crtomega = 0;
+         }
+      
+      // [0, 2 * rmax]
+      crtmax = (z[0][2 * rmax] + z[0][2 * rmax - 1] + z[1][2 * rmax] + z[1][2 * rmax - 1]) / 4;
+      if (crtmax > zmax)
+         {
+            zmax = crtmax;
+            crtr = 2 * rmax; 
+            crtomega = 0;
+         }
+
+      // [179, 0]
+      crtmax = (z[179][0] + z[178][0] + z[179][1] + z[178][1]) / 4;
+      if (crtmax > zmax)
+         {
+            zmax = crtmax;
+            crtr = 0; 
+            crtomega = 179;
+         }
+
+      // [179, 2 * rmax]
+      crtmax = (z[179][2 * rmax] + z[179][2 * rmax - 1] + z[178][2 * rmax] + z[178][2 * rmax - 1]) / 4;
+      if (crtmax > zmax)
+         {
+            zmax = crtmax;
+            crtr = 2 * rmax; 
+            crtomega = 179;
+         }
+
+      // Also deal with the first and last lines, and first and last columns, separately
+      // Since without corners, each element on them has 5 neighbours
+      for (int r = 1; r < 2 * rmax; r++)
+      {
+         // First line
+         crtmax = (z[0][r-1] + z[0][r] + z[0][r+1] + z[1][r-1] + z[1][r] + z[1][r+1]) / 6;
+         if (crtmax > zmax)
+            {
+               zmax = crtmax;
+               crtr = r; 
+               crtomega = 0;
+            }
+         // Last line
+         crtmax = (z[179][r-1] + z[179][r] + z[179][r+1] + z[179][r-1] + z[179][r] + z[179][r+1]) / 6;
+         if (crtmax > zmax)
+            {
+               zmax = crtmax;
+               crtr = r; 
+               crtomega = 179;
+            }
+      }
+      
+      for (int omega = 1; omega < 179; omega++)
+      {
+         // First column
+         crtmax = (z[omega - 1][0] + z[omega][0] + z[omega + 1][0] + z[omega - 1][1] + z[omega][1] + z[omega + 1][1]) / 6;
+         if (crtmax > zmax)
+            {
+               zmax = crtmax;
+               crtr = 0; 
+               crtomega = omega;
+            }
+         // Last column
+         crtmax = (z[omega - 1][2 * rmax - 1] + z[omega][2 * rmax - 1] + z[omega + 1][2 * rmax - 1] + z[omega - 1][2 * rmax] + z[omega][2 * rmax] + z[omega + 1][2 * rmax]) / 6;
+         if (crtmax > zmax)
+            {
+               zmax = crtmax;
+               crtr = 2 * rmax - 1; 
+               crtomega = omega;
+            }
+      }
+      
       for (int omega = 1; omega < 179; omega++)
          for (int r = 1; r < 2 * rmax; r++)
          {
