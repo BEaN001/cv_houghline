@@ -56,23 +56,20 @@ void generateColours()
 }
 
 /*
-   Parameters:
-   img - the original image
-   nmax - the number of maxima to be searched for
+   Input parameters:
+      (yc, xc) - coordinates of the origin used (in image coordinates)
+      rmax - half of the biggest distance in the image (long diagonal)
+      img - the original image, binarised
+      nmax - the number of maxima to search
+      oinc - increment for omega values
+      rinc - increment for the r values
    
-   r0 - array holding the r values of the maxima
-   omega0 - array holding the omega values of the maxima
+   Output parameters:
+      r0 - array holding the r values of the maxima
+      omega0 - array holding the omega values of the maxima
  */
-void houghtransform(Mat img, int nmax, double *r0, double *omega0)
+void houghtransform(int yc, int xc, int rmax, Mat img, int nmax, double *r0, double *omega0, int oinc, int rinc)
 {
-   // Define the origin for the Hough transform computation
-   // In this case, it's the centre of the image
-   int yc = img.rows / 2;
-   int xc = img.cols / 2;
-   
-   // Define rmax as half of the image's diagonal:
-   int rmax = sqrt(img.rows * img.rows + img.cols * img.cols) / 2;
-      
    // Define the matrix which will hold the Hough image
    // It has the omega angles on the rows, ranging between 0 and 180
    // (the actual number of values is defined by the granularity)
@@ -257,13 +254,8 @@ void houghtransform(Mat img, int nmax, double *r0, double *omega0)
       for (int r = 0; r < 2 * rmax + 1; r++)
          houghImage.at<uchar>(omega, r) = (uchar) (z[omega][r] * 255 / max);   
       
-   // Do some magic to transform the i into a string
-   std::string imgName;
-   std::stringstream out;
-   out << 4;
-   imgName = out.str();
-   // so we can have dynamically named images, so we can show the hough space at each iteration :-)
-   imshow(imgName, houghImage);      
+   imshow("Hough image", houghImage);      
+   waitKey(0);
 }
 
 int main(int argc, char **argv)
@@ -294,10 +286,23 @@ int main(int argc, char **argv)
    /*************************
       HOUGH TRANSFORM STEPS
     ************************/
+   // Define the origin for the Hough transform computation
+   // In this case, it's the centre of the image
+   int yc = grayImage.rows / 2;
+   int xc = grayImage.cols / 2;
+   
+/*   // In this case, it's the centre of the base of the image
+   int yc = grayImage.rows;
+   int xc = grayImage.cols / 2;*/
+
+   // Define rmax as half of the image's diagonal:
+   int rmax = sqrt(grayImage.rows * grayImage.rows + grayImage.cols * grayImage.cols) / 2;
+
+   // Define the number of maxima to be searched      
    int nmax = 3;
    double r0[nmax];
    double omega0[nmax];
-   houghtransform(grayImage, nmax, r0, omega0);
+   houghtransform(yc, xc, rmax, grayImage, nmax, r0, omega0, 1, 1);
    
    /*******************************
       DETECTED LINE DRAWING STEPS
@@ -306,16 +311,18 @@ int main(int argc, char **argv)
    generateColours();
    srand(time(NULL));
    int colIndex;
+   double m;
+   int xvals[2];
+   int yvals[2];
     
-   for (int k = 0; k < nmax; k++)
+   for (int i = 0; i < nmax; i++)
    {
-      int i = k;
       printf("Drawing maximum #%d: r0=%f, omega0=%f\n", i, r0[i], omega0[i]);
       // Compute the (x, y) value pairs for the detected line
       // x are columns, y are rows! (cf. math notation)
       
       // We reformat the normal line equation to a y = mx + b form:
-      double m = 0.0;
+      m = 0.0;
       if (sin(omega0[i] * conv) != 0)
          m = (double)(-cos(omega0[i] * conv)) / (double)(sin(omega0[i] * conv));
       else
@@ -324,36 +331,28 @@ int main(int argc, char **argv)
          m = 1000000; // "infinity"
       }
       
-      colIndex = rand() % 7;
       if ((m >= -1) && (m <= 1))
       {
-//         printf("The slope of the detected line is between [-1, 1]...\n");
-         int xvals[grayImage.cols]; 
-         int yvals[grayImage.cols];
-         for (int x = 0; x < grayImage.cols; x++)
-         {
-            xvals[x] = x;
-            yvals[x] = round((-cos(omega0[i] * conv) / sin(omega0[i] * conv)) * (double)(x - (grayImage.cols / 2)) + (r0[i] / sin(omega0[i] * conv)) + (double)(grayImage.rows / 2));
-         }
-         printf("Line from (xval0 = %d, yval0 = %d) to (xvaln = %d, yvaln = %d) \n\n", xvals[0], yvals[0], xvals[grayImage.cols - 1], yvals[grayImage.cols - 1]);
-         line(srcImage, Point(xvals[0], yvals[0]), Point(xvals[grayImage.cols - 1], yvals[grayImage.cols - 1]), Scalar(colours[colIndex].blue, colours[colIndex].green, colours[colIndex].red), 2, 8);
+         printf("The slope of the detected line is between [-1, 1]...\n");
+         xvals[0] = 0;
+         xvals[1] = grayImage.cols;
+         yvals[0] = round((-cos(omega0[i] * conv) / sin(omega0[i] * conv)) * (double)(xvals[0] - xc) + (r0[i] / sin(omega0[i] * conv)) + (double)yc);
+         yvals[1] = round((-cos(omega0[i] * conv) / sin(omega0[i] * conv)) * (double)(xvals[1] - xc) + (r0[i] / sin(omega0[i] * conv)) + (double)yc);
       }
       else
       {
-//         printf("The slope of the detected line is in (-inf, -1) U (1, +inf)...\n");
-         int yvals[grayImage.rows]; 
-         int xvals[grayImage.rows];
-         for (int y = 0; y < grayImage.rows; y++)
-         {
-            yvals[y] = y;
-            xvals[y] = round((-sin(omega0[i] * conv) / cos(omega0[i] * conv)) * (double)(y - (grayImage.rows / 2)) + (r0[i] / cos(omega0[i] * conv)) + (double)(grayImage.cols / 2));
-         }
-         printf("Line from (xval0 = %d, yval0 = %d) to (xvaln = %d, yvaln = %d) \n\n", xvals[0], yvals[0], xvals[grayImage.rows - 1], yvals[grayImage.rows - 1]);
-         line(srcImage, Point(xvals[0], yvals[0]), Point(xvals[grayImage.rows - 1], yvals[grayImage.rows - 1]), Scalar(colours[colIndex].blue, colours[colIndex].green, colours[colIndex].red), 2, 8);
+         printf("The slope of the detected line is in (-inf, -1) U (1, +inf)...\n");
+         yvals[0] = 0;
+         yvals[1] = grayImage.rows;
+         xvals[0] = round((-sin(omega0[i] * conv) / cos(omega0[i] * conv)) * (double)(yvals[0] - yc) + (r0[i] / cos(omega0[i] * conv)) + (double)xc);
+         xvals[1] = round((-sin(omega0[i] * conv) / cos(omega0[i] * conv)) * (double)(yvals[1] - yc) + (r0[i] / cos(omega0[i] * conv)) + (double)xc);
       }
-      imshow("Detected lines", srcImage);
-   }
-   printf("\n\n");
+      printf("Line from (xval0 = %d, yval0 = %d) to (xval1 = %d, yval1 = %d) \n\n", xvals[0], yvals[0], xvals[1], yvals[1]);
+      colIndex = rand() % 7;
+      line(srcImage, Point(xvals[0], yvals[0]), Point(xvals[1], yvals[1]), Scalar(colours[colIndex].blue, colours[colIndex].green, colours[colIndex].red), 2, 8);
+    }
+   imshow("Detected lines", srcImage);
+   printf("\n");
    waitKey(0);
 
    return 0;
